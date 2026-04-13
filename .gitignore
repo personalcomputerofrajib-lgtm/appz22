@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.buildozer/
+bin/
+scratch/
+test_logic.py
