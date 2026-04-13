@@ -55,8 +55,10 @@ def compress_image(src, dst, ext, target_kb):
 def compress_pdf(src, dst, target_kb):
     import pypdf
     import img2pdf
-    from reportlab.lib.pagesizes import A4
     from PIL import Image
+
+    # A4 dimensions in points (72 DPI)
+    A4 = (595.27, 841.89)
 
     target_b = target_kb * 1024
     

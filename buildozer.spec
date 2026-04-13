@@ -7,7 +7,7 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
 
 # Requirements
-requirements = python3, kivy==2.3.0, kivymd==1.2.0, pillow, pypdf, img2pdf, reportlab
+requirements = python3==3.10.11, kivy==2.3.0, kivymd==1.2.0, pillow==9.5.0, pypdf, img2pdf
 
 orientation = portrait
 osx.python_version = 3
@@ -20,7 +20,7 @@ android.api = 33
 android.minapi = 21
 android.sdk = 33
 android.ndk = 25b
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a
 
 # Android packaging
 android.preserve_paths = lib/python*/site-packages/*.so

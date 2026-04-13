@@ -15,9 +15,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Cache Buildozer
+        uses: actions/cache@v4
+        with:
+          path: |
+            .buildozer
+            .buildozer_global
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v3
+
       - name: Build with Buildozer (Docker)
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/user/hostcwd -v ${{ github.workspace }}/.buildozer_global:/home/user/.buildozer_global --entrypoint /bin/bash kivy/buildozer:latest -c "apt-get update && apt-get install -y wget && cd /home/user/hostcwd && yes | buildozer android debug"
+          # Create directories and ensure they are writable by the container user
+          mkdir -p .buildozer .buildozer_global
+          chmod -R 777 .buildozer .buildozer_global
+          
+          docker run --rm \
+            -v ${{ github.workspace }}:/home/user/hostcwd \
+            -v ${{ github.workspace }}/.buildozer_global:/home/user/.buildozer \
+            -e HOME=/home/user \
+            --entrypoint /bin/bash kivy/buildozer:latest -c "
+              apt-get update && apt-get install -y wget && \
+              cd /home/user/hostcwd && \
+              buildozer android clean && \
+              yes | buildozer android debug
+            "
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
