@@ -7,7 +7,7 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
 
 # Requirements
-requirements = python3==3.10.11, kivy==2.3.0, kivymd==1.2.0, pillow==9.5.0, pypdf, img2pdf
+requirements = python3, kivy==2.3.0, kivymd==1.2.0, pillow==9.5.0, pypdf, img2pdf
 
 orientation = portrait
 osx.python_version = 3
