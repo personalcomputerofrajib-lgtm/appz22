@@ -36,7 +36,7 @@ jobs:
             --entrypoint /bin/bash kivy/buildozer:latest -c "
               apt-get update && apt-get install -y wget && \
               cd /home/user/hostcwd && \
-              buildozer android clean && \
+              yes | buildozer android clean && \
               yes | buildozer android debug
             "
 
