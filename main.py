@@ -231,6 +231,35 @@ MDBoxLayout:
                 size_hint_x: None
                 width: dp(60)
 
+        MDBoxLayout:
+            orientation: 'vertical'
+            size_hint_y: None
+            height: self.minimum_height
+            spacing: dp(5)
+            padding: [dp(20), 0]
+
+            MDLabel:
+                text: "Output Format:"
+                theme_text_color: "Secondary"
+                font_style: "Caption"
+
+            MDBoxLayout:
+                orientation: 'horizontal'
+                spacing: dp(10)
+                adaptive_height: True
+
+                MDRectangleFlatButton:
+                    id: btn_orig
+                    text: "Original"
+                    on_release: app.set_output_format("Original")
+                
+                MDRectangleFlatButton:
+                    id: btn_pdf
+                    text: "PDF"
+                    md_bg_color: app.theme_cls.primary_color
+                    text_color: 1, 1, 1, 1
+                    on_release: app.set_output_format("PDF")
+
     Widget:
 
     MDFillRoundFlatButton:
@@ -247,6 +276,7 @@ class SwiftCompressor(MDApp):
         self.theme_cls.primary_palette = "DeepPurple"
         self.theme_cls.theme_style = "Dark"
         self.selected_path = None
+        self.output_format = "PDF" # Default as requested
         self.temp_dir = tempfile.mkdtemp()
         
         if platform == "android":
@@ -258,12 +288,25 @@ class SwiftCompressor(MDApp):
             )
         return Builder.load_string(KV)
 
+    def set_output_format(self, fmt):
+        self.output_format = fmt
+        if fmt == "PDF":
+            self.root.ids.btn_pdf.md_bg_color = self.theme_cls.primary_color
+            self.root.ids.btn_pdf.text_color = [1, 1, 1, 1]
+            self.root.ids.btn_orig.md_bg_color = [0, 0, 0, 0]
+            self.root.ids.btn_orig.text_color = self.theme_cls.primary_color
+        else:
+            self.root.ids.btn_orig.md_bg_color = self.theme_cls.primary_color
+            self.root.ids.btn_orig.text_color = [1, 1, 1, 1]
+            self.root.ids.btn_pdf.md_bg_color = [0, 0, 0, 0]
+            self.root.ids.btn_pdf.text_color = self.theme_cls.primary_color
+
     def open_file_manager(self):
+        # ... (unchanged)
         if platform == "android":
             intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
             intent.addCategory(Intent.CATEGORY_OPENABLE)
             intent.setType("*/*")
-            # Filter for images and PDFs
             mimeTypes = ["image/*", "application/pdf"]
             intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
             PythonActivity.mActivity.startActivityForResult(intent, 42)
@@ -272,6 +315,7 @@ class SwiftCompressor(MDApp):
             self.file_manager.show(path)
 
     def on_activity_result(self, request_code, result_code, intent):
+        # ... (unchanged)
         if request_code == 42:
             if result_code == -1: # RESULT_OK
                 uri = intent.getData()
@@ -280,11 +324,11 @@ class SwiftCompressor(MDApp):
                 toast("File selection cancelled")
 
     def handle_android_uri(self, uri):
+        # ... (unchanged)
         try:
             context = PythonActivity.mActivity
             content_resolver = context.getContentResolver()
             
-            # Get display name
             name = "selected_file"
             cursor = content_resolver.query(uri, None, None, None, None)
             if cursor and cursor.moveToFirst():
@@ -292,20 +336,15 @@ class SwiftCompressor(MDApp):
                 name = cursor.getString(name_index)
                 cursor.close()
             
-            # Copy to temp file
             input_stream = content_resolver.openInputStream(uri)
             temp_path = os.path.join(self.temp_dir, name)
             
-            # Read in chunks to avoid memory issues with large files
             with open(temp_path, "wb") as f:
                 buffer = autoclass('java.lang.reflect.Array').newInstance(autoclass('java.lang.Byte').TYPE, 1024*64)
                 while True:
                     read = input_stream.read(buffer)
                     if read == -1:
                         break
-                    # Convert java byte array to python bytes (inefficient but safe for small/med files)
-                    # Actually, Pyjnius handles byte arrays fairly well lately, but let's be careful.
-                    # A better way is to use a java-based copy if possible, or just:
                     f.write(bytes(buffer)[:read])
             
             self.select_path(temp_path)
@@ -335,10 +374,14 @@ class SwiftCompressor(MDApp):
         src = self.selected_path
         ext = Path(src).suffix.lower()
         
+        # Determine target extension
+        if self.output_format == "PDF":
+            target_ext = ".pdf"
+        else:
+            target_ext = ext
+
         if platform == "android":
             from android.storage import primary_external_storage_path
-            # On Android 11+, writing to Download might require specific handling,
-            # but usually the app's Download subfolder works or we use MANAGE_EXTERNAL_STORAGE.
             downloads = os.path.join(primary_external_storage_path(), "Download")
         else:
             downloads = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -347,16 +390,30 @@ class SwiftCompressor(MDApp):
             try:
                 os.makedirs(downloads)
             except:
-                # Fallback to internal storage if Download is restricted
                 downloads = self.user_data_dir
         
-        dst_name = f"{Path(src).stem}_compressed_{target_kb}kb{ext}"
+        dst_name = f"{Path(src).stem}_compressed_{target_kb}kb{target_ext}"
         dst = os.path.join(downloads, dst_name)
 
         try:
             success = False
             if ext in IMAGE_EXTS:
-                success = compress_image(src, dst, ext, target_kb)
+                if target_ext == ".pdf":
+                    # Step 1: Compress image to temp JPEG
+                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_img:
+                        tmp_path = tmp_img.name
+                    
+                    if compress_image(src, tmp_path, ".jpg", target_kb):
+                        # Step 2: Convert to PDF
+                        import img2pdf
+                        A4 = (595.27, 841.89)
+                        layout = img2pdf.get_layout_fun(A4, fit=img2pdf.FitMode.into)
+                        with open(dst, "wb") as f:
+                            f.write(img2pdf.convert([tmp_path], layout_fun=layout))
+                        success = True
+                        os.remove(tmp_path)
+                else:
+                    success = compress_image(src, dst, ext, target_kb)
             elif ext in PDF_EXTS:
                 success = compress_pdf(src, dst, target_kb)
             else:
