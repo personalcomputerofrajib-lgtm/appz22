@@ -21,7 +21,7 @@ jobs:
           path: |
             .buildozer
             .buildozer_global
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v3
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v4
 
       - name: Build with Buildozer (Docker)
         run: |
@@ -37,6 +37,7 @@ jobs:
               apt-get update && apt-get install -y wget && \
               git config --global --add safe.directory '*' && \
               cd /home/user/hostcwd && \
+              buildozer android clean && \
               yes | buildozer android debug
             "
 

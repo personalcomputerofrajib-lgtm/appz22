@@ -19,27 +19,17 @@ if platform == "android":
     from android import activity
     from android.permissions import request_permissions, Permission
     
-    # Android System Classes
-    Intent = autoclass('android.content.Intent')
-    PythonActivity = autoclass('org.kivy.android.PythonActivity')
-    Uri = autoclass('android.net.Uri')
-    ContentResolver = autoclass('android.content.ContentResolver')
-    OpenableColumns = autoclass('android.provider.OpenableColumns')
-    ParcelFileDescriptor = autoclass('android.os.ParcelFileDescriptor')
-    Bitmap = autoclass('android.graphics.Bitmap')
-    BitmapFactory = autoclass('android.graphics.BitmapFactory')
-    File = autoclass('java.io.File')
-    FileOutputStream = autoclass('java.io.FileOutputStream')
-    # Native PDF Rendering
-    PdfRenderer = autoclass('android.graphics.pdf.PdfRenderer')
-    # AI ML Kit Segmentation
-    SelfieSegmenter = autoclass('com.google.mlkit.vision.segmentation.selfie.SelfieSegmenter')
-    SelfieSegmenterOptions = autoclass('com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions')
-    InputImage = autoclass('com.google.mlkit.vision.common.InputImage')
-    Segmentation = autoclass('com.google.mlkit.vision.segmentation.Segmentation')
-    # Task completion listeners
-    OnSuccessListener = autoclass('com.google.android.gms.tasks.OnSuccessListener')
-    OnFailureListener = autoclass('com.google.android.gms.tasks.OnFailureListener')
+    # Store classes for lazy loading
+    _JAVA_CLASSES = {}
+
+    def get_java_class(name):
+        if name not in _JAVA_CLASSES:
+            try:
+                _JAVA_CLASSES[name] = autoclass(name)
+            except Exception as e:
+                print(f"Failed to load Java class {name}: {e}")
+                return None
+        return _JAVA_CLASSES[name]
 
 # --- Shared Logic ---
 
@@ -78,12 +68,19 @@ def compress_image(src, dst, ext, target_kb):
 def android_render_pdf_to_images(src, tmp_dir):
     image_paths = []
     try:
+        ParcelFileDescriptor = get_java_class('android.os.ParcelFileDescriptor')
+        File = get_java_class('java.io.File')
+        PdfRenderer = get_java_class('android.graphics.pdf.PdfRenderer')
+        
         fd = ParcelFileDescriptor.open(File(src), ParcelFileDescriptor.MODE_READ_ONLY)
         renderer = PdfRenderer(fd)
         for i in range(renderer.getPageCount()):
             page = renderer.openPage(i)
             scale = 2.5
             w, h = int(page.getWidth() * scale), int(page.getHeight() * scale)
+            Bitmap = get_java_class('android.graphics.Bitmap')
+            FileOutputStream = get_java_class('java.io.FileOutputStream')
+            
             bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             page.render(bitmap, None, None, 1) # FOR_DISPLAY
             img_path = os.path.join(tmp_dir, f"p_{i:04d}.jpg")
@@ -318,6 +315,9 @@ class SwiftCompressor(MDApp):
     def open_file_manager(self, context="compress"):
         self.current_context = context
         if platform == "android":
+            Intent = get_java_class('android.content.Intent')
+            PythonActivity = get_java_class('org.kivy.android.PythonActivity')
+            
             intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
             intent.addCategory(Intent.CATEGORY_OPENABLE)
             intent.setType("*/*")
@@ -333,6 +333,9 @@ class SwiftCompressor(MDApp):
 
     def handle_uri(self, uri):
         try:
+            PythonActivity = get_java_class('org.kivy.android.PythonActivity')
+            OpenableColumns = get_java_class('android.provider.OpenableColumns')
+            
             resolver = PythonActivity.mActivity.getContentResolver()
             name = "file"
             cursor = resolver.query(uri, None, None, None, None)
@@ -414,6 +417,15 @@ class SwiftCompressor(MDApp):
         try:
             toast("Processing with AI...")
             # 1. Setup Segmenter
+            SelfieSegmenterOptions = get_java_class('com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions')
+            Segmentation = get_java_class('com.google.mlkit.vision.segmentation.Segmentation')
+            BitmapFactory = get_java_class('android.graphics.BitmapFactory')
+            InputImage = get_java_class('com.google.mlkit.vision.common.InputImage')
+            
+            if not SelfieSegmenterOptions or not Segmentation or not InputImage:
+                toast("AI Engine not available")
+                return
+
             opts = SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build()
             client = Segmentation.getClient(opts)
             
@@ -439,6 +451,9 @@ class SwiftCompressor(MDApp):
         
         def on_success(mask):
             try:
+                Bitmap = get_java_class('android.graphics.Bitmap')
+                FileOutputStream = get_java_class('java.io.FileOutputStream')
+                
                 # Mask processing
                 w, h = original_bg.getWidth(), original_bg.getHeight()
                 out_bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -469,5 +484,18 @@ class SwiftCompressor(MDApp):
 
 if __name__ == "__main__":
     if platform == "android":
-        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE, Permission.MANAGE_EXTERNAL_STORAGE, Permission.INTERNET])
+        perms = [
+            Permission.READ_EXTERNAL_STORAGE, 
+            Permission.WRITE_EXTERNAL_STORAGE, 
+            Permission.MANAGE_EXTERNAL_STORAGE, 
+            Permission.INTERNET
+        ]
+        # Android 13+ (API 33) specific permissions
+        from android import api_version
+        if api_version >= 33:
+            perms.extend([
+                'android.permission.READ_MEDIA_IMAGES',
+                'android.permission.READ_MEDIA_VIDEO'
+            ])
+        request_permissions(perms)
     SwiftCompressor().run()
