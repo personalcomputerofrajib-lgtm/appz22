@@ -22,8 +22,14 @@ if platform == "android":
     Uri = autoclass('android.net.Uri')
     ContentResolver = autoclass('android.content.ContentResolver')
     OpenableColumns = autoclass('android.provider.OpenableColumns')
+    # Native PDF Rendering imports
+    PdfRenderer = autoclass('android.graphics.pdf.PdfRenderer')
+    ParcelFileDescriptor = autoclass('android.os.ParcelFileDescriptor')
+    Bitmap = autoclass('android.graphics.Bitmap')
+    File = autoclass('java.io.File')
+    FileOutputStream = autoclass('java.io.FileOutputStream')
 
-# --- Compression Logic (Unchanged) ---
+# --- Compression Logic ---
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif"}
 PDF_EXTS = {".pdf"}
@@ -64,6 +70,52 @@ def compress_image(src, dst, ext, target_kb):
             scale = max(0.10, scale - 0.15)
     return os.path.getsize(dst) <= target_b
 
+def android_render_pdf_to_images(src, tmp_dir):
+    """
+    Uses Android Native PdfRenderer to convert PDF pages to high-quality JPEGs.
+    This captures text and layout perfectly, unlike simple image extraction.
+    """
+    image_paths = []
+    try:
+        source_file = File(src)
+        fd = ParcelFileDescriptor.open(source_file, ParcelFileDescriptor.MODE_READ_ONLY)
+        renderer = PdfRenderer(fd)
+        
+        page_count = renderer.getPageCount()
+        for i in range(page_count):
+            page = renderer.openPage(i)
+            
+            # Rendering at 2x or 3x scale for "Print Quality"
+            # Standard PDF point is 1/72 inch. We want at least 200-300 DPI.
+            # 72 * 3 = 216 DPI (Good balance)
+            scale = 3
+            w, h = int(page.getWidth() * scale), int(page.getHeight() * scale)
+            
+            # Create Bitmap
+            bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            
+            # Render page to bitmap (RENDER_MODE_FOR_DISPLAY = 1)
+            page.render(bitmap, None, None, 1)
+            
+            # Save bitmap to file
+            img_path = os.path.join(tmp_dir, f"p_{i:04d}.jpg")
+            os_stream = FileOutputStream(img_path)
+            # Use high quality initially, compression happens in final step
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, os_stream)
+            os_stream.close()
+            
+            # Cleanup native resources immediately to prevent OOM
+            bitmap.recycle()
+            page.close()
+            image_paths.append(img_path)
+            
+        renderer.close()
+        fd.close()
+    except Exception as e:
+        print(f"Android PDF Rendering failed: {e}")
+        return []
+    return image_paths
+
 def compress_pdf(src, dst, target_kb):
     import pypdf
     import img2pdf
@@ -71,31 +123,36 @@ def compress_pdf(src, dst, target_kb):
 
     # A4 dimensions in points (72 DPI)
     A4 = (595.27, 841.89)
-
     target_b = target_kb * 1024
     
-    # Pass 1: Simple Re-save
+    # Pass 1: Simple Re-save / Metadata Optimization
     writer = pypdf.PdfWriter()
-    reader = pypdf.PdfReader(src)
-    for page in reader.pages:
-        writer.add_page(page)
     try:
+        reader = pypdf.PdfReader(src)
+        for page in reader.pages:
+            writer.add_page(page)
         writer.compress_identical_objects(remove_duplicates=True, remove_unreferenced=True)
+        with open(dst, "wb") as f:
+            writer.write(f)
+        
+        if os.path.getsize(dst) <= target_b:
+            return True
     except:
         pass
-    with open(dst, "wb") as f:
-        writer.write(f)
-    
-    if os.path.getsize(dst) <= target_b:
-        return True
 
-    # Pass 2: Rasterize pages (Double-print approach)
+    # Pass 2: Rasterize pages (The "Double Print" Fix)
+    # This fixes cut edges, wrong sizes, and alignment by redrawing everything.
     a4_w_pt, a4_h_pt = A4
     layout = img2pdf.get_layout_fun((a4_w_pt, a4_h_pt), fit=img2pdf.FitMode.into)
 
-    for dpi in (120, 96, 72, 60, 48):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            jpg_paths = []
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        jpg_paths = []
+        if platform == "android":
+            # Use Native Print Engine
+            jpg_paths = android_render_pdf_to_images(src, tmp_dir)
+        
+        # Fallback for non-android or if native failed
+        if not jpg_paths:
             reader = pypdf.PdfReader(src)
             for i, page in enumerate(reader.pages):
                 jp = os.path.join(tmp_dir, f"page_{i:04d}.jpg")
@@ -103,18 +160,17 @@ def compress_pdf(src, dst, target_kb):
                 if imgs:
                     pil_img = Image.open(imgs[0].data)
                 else:
-                    pil_img = Image.new("RGB", (595, 842), "white")
+                    pil_img = Image.new("RGB", (int(a4_w_pt), int(a4_h_pt)), "white")
                 
-                pil_img.convert("RGB").save(jp, "JPEG", quality=70, optimize=True)
+                pil_img.convert("RGB").save(jp, "JPEG", quality=75, optimize=True)
                 jpg_paths.append(jp)
-            
-            if not jpg_paths: continue
-            
-            with open(dst, "wb") as f:
-                f.write(img2pdf.convert(jpg_paths, layout_fun=layout))
         
-        if os.path.getsize(dst) <= target_b:
-            return True
+        if not jpg_paths: return False
+        
+        # Final "Print to PDF" with Fit-to-A4 logic
+        with open(dst, "wb") as f:
+            f.write(img2pdf.convert(jpg_paths, layout_fun=layout))
+        
     return os.path.getsize(dst) <= target_b
 
 # --- UI Layout ---
