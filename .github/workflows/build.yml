@@ -37,7 +37,7 @@ jobs:
               apt-get update && apt-get install -y wget && \
               git config --global --add safe.directory '*' && \
               cd /home/user/hostcwd && \
-              buildozer android clean && \
+              if [ -d .buildozer/android/platform/python-for-android ]; then buildozer android clean; else echo 'Fresh build, skipping clean...'; fi && \
               yes | buildozer android debug
             "
 
