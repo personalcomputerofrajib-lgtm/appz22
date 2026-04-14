@@ -100,7 +100,8 @@ def remove_background(src, dst, on_progress=None, on_complete=None, on_error=Non
         
         task = segmenter.process(input_image)
         # Block until complete (we're on a background thread, this is safe)
-        result = Tasks.await(task)
+        # 'await' is a Python reserved keyword, must use getattr
+        result = getattr(Tasks, 'await')(task)
         
         if on_progress:
             on_progress(60, "Processing segmentation mask...")
