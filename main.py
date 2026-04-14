@@ -2,17 +2,24 @@ import os
 import sys
 import tempfile
 import shutil
+import traceback
 from pathlib import Path
 
 from kivy.lang import Builder
 from kivy.utils import platform
 from kivy.properties import StringProperty, ObjectProperty
-from kivymd.app import MDApp
-from kivymd.uix.filemanager import MDFileManager
-from kivymd.toast import toast
-from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDRectangleFlatButton
-from kivymd.uix.card import MDCard
+from kivy.logger import Logger
+
+try:
+    from kivymd.app import MDApp
+    from kivymd.uix.filemanager import MDFileManager
+    from kivymd.toast import toast
+    from kivymd.uix.dialog import MDDialog
+    from kivymd.uix.button import MDFlatButton, MDRectangleFlatButton
+    from kivymd.uix.card import MDCard
+except Exception as e:
+    Logger.error(f"SwiftApp: Failed to import KivyMD: {e}")
+    raise
 
 if platform == "android":
     from jnius import autoclass, cast
@@ -187,7 +194,7 @@ MDBoxLayout:
                                 max: 2000
                                 value: 250
                                 step: 50
-                                on_value: app.update_label("slider_val", f"{int(self.value)} KB")
+                                on_value: app.update_slider_label(self.value)
                             MDLabel:
                                 id: slider_val
                                 text: "250 KB"
@@ -262,9 +269,9 @@ MDBoxLayout:
                 padding: dp(40)
                 spacing: dp(20)
                 
-                MDIcon:
+                MDIconButton:
                     icon: "shield-check"
-                    font_size: "80sp"
+                    user_font_size: "80sp"
                     pos_hint: {"center_x": .5}
                     theme_text_color: "Custom"
                     text_color: app.theme_cls.primary_color
@@ -282,35 +289,66 @@ MDBoxLayout:
 
 class SwiftCompressor(MDApp):
     def build(self):
-        self.theme_cls.primary_palette = "DeepPurple"
-        self.theme_cls.theme_style = "Light"
-        self.output_mode = "PDF"
-        self.selected_path = None
-        self.rem_path = None
-        self.temp_dir = tempfile.mkdtemp()
-        
-        if platform == "android":
-            activity.bind(on_activity_result=self.on_activity_result)
-        else:
-            self.file_manager = MDFileManager(
-                exit_manager=self.exit_manager,
-                select_path=self.select_path,
-            )
-        return Builder.load_string(KV)
+        try:
+            self.theme_cls.primary_palette = "DeepPurple"
+            self.theme_cls.theme_style = "Light"
+            self.output_mode = "PDF"
+            self.selected_path = None
+            self.rem_path = None
+            self.temp_dir = tempfile.mkdtemp()
+            
+            if platform == "android":
+                activity.bind(on_activity_result=self.on_activity_result)
+            else:
+                self.file_manager = MDFileManager(
+                    exit_manager=self.exit_manager,
+                    select_path=self.select_path,
+                )
+            return Builder.load_string(KV)
+        except Exception as e:
+            Logger.error(f"SwiftApp: build() failed: {e}")
+            Logger.error(traceback.format_exc())
+            raise
 
-    def update_label(self, id, text):
-        self.root.ids[id].text = text
+    def _find_widget_by_id(self, widget_id):
+        """Recursively find a widget by id in the widget tree."""
+        def _search(widget, target_id):
+            if hasattr(widget, 'ids') and target_id in widget.ids:
+                return widget.ids[target_id]
+            for child in widget.children:
+                result = _search(child, target_id)
+                if result:
+                    return result
+            return None
+        return _search(self.root, widget_id)
+
+    def update_slider_label(self, value):
+        try:
+            label = self._find_widget_by_id('slider_val')
+            if label:
+                label.text = f"{int(value)} KB"
+        except Exception as e:
+            Logger.warning(f"SwiftApp: update_slider_label failed: {e}")
 
     def set_out_mode(self, mode):
         self.output_mode = mode
-        if mode == "PDF":
-            self.root.ids.btn_out_pdf.md_bg_color = self.theme_cls.primary_color
-            self.root.ids.btn_out_pdf.text_color = [1, 1, 1, 1]
-            self.root.ids.btn_out_orig.md_bg_color = [0, 0, 0, 0]
-        else:
-            self.root.ids.btn_out_orig.md_bg_color = self.theme_cls.primary_color
-            self.root.ids.btn_out_orig.text_color = [1, 1, 1, 1]
-            self.root.ids.btn_out_pdf.md_bg_color = [0, 0, 0, 0]
+        try:
+            btn_pdf = self._find_widget_by_id('btn_out_pdf')
+            btn_orig = self._find_widget_by_id('btn_out_orig')
+            if mode == "PDF":
+                if btn_pdf:
+                    btn_pdf.md_bg_color = self.theme_cls.primary_color
+                    btn_pdf.text_color = [1, 1, 1, 1]
+                if btn_orig:
+                    btn_orig.md_bg_color = [0, 0, 0, 0]
+            else:
+                if btn_orig:
+                    btn_orig.md_bg_color = self.theme_cls.primary_color
+                    btn_orig.text_color = [1, 1, 1, 1]
+                if btn_pdf:
+                    btn_pdf.md_bg_color = [0, 0, 0, 0]
+        except Exception as e:
+            Logger.warning(f"SwiftApp: set_out_mode failed: {e}")
 
     def open_file_manager(self, context="compress"):
         self.current_context = context
@@ -354,17 +392,20 @@ class SwiftCompressor(MDApp):
             
             if self.current_context == "compress":
                 self.selected_path = p
-                self.root.ids.comp_file_label.text = name
+                label = self._find_widget_by_id('comp_file_label')
+                if label: label.text = name
             else:
                 self.rem_path = p
-                self.root.ids.rem_file_label.text = name
+                label = self._find_widget_by_id('rem_file_label')
+                if label: label.text = name
             toast(f"Loaded: {name}")
         except Exception as e: toast(str(e))
 
     def select_path(self, path):
         # Desktop fallback
         self.selected_path = path
-        self.root.ids.comp_file_label.text = os.path.basename(path)
+        label = self._find_widget_by_id('comp_file_label')
+        if label: label.text = os.path.basename(path)
         self.exit_manager()
 
     def exit_manager(self, *args):
@@ -375,7 +416,14 @@ class SwiftCompressor(MDApp):
             toast("Select a file first")
             return
         
-        target_kb = int(self.root.ids.size_slider.value)
+        target_kb = 250
+        try:
+            slider = self._find_widget_by_id('size_slider')
+            if slider:
+                target_kb = int(slider.value)
+        except:
+            pass
+            
         src = self.selected_path
         ext = Path(src).suffix.lower()
         target_ext = ".pdf" if self.output_mode == "PDF" else ext
@@ -484,18 +532,24 @@ class SwiftCompressor(MDApp):
 
 if __name__ == "__main__":
     if platform == "android":
+        # Use only permissions that exist on the Permission class.
+        # MANAGE_EXTERNAL_STORAGE and INTERNET are NOT in p4a's Permission class
+        # and will cause an AttributeError crash if accessed.
+        # INTERNET is a normal permission (auto-granted via manifest).
+        # MANAGE_EXTERNAL_STORAGE requires a special intent (handled separately).
         perms = [
             Permission.READ_EXTERNAL_STORAGE, 
-            Permission.WRITE_EXTERNAL_STORAGE, 
-            Permission.MANAGE_EXTERNAL_STORAGE, 
-            Permission.INTERNET
+            Permission.WRITE_EXTERNAL_STORAGE,
         ]
-        # Android 13+ (API 33) specific permissions
-        from android import api_version
-        if api_version >= 33:
-            perms.extend([
-                'android.permission.READ_MEDIA_IMAGES',
-                'android.permission.READ_MEDIA_VIDEO'
-            ])
+        # Android 13+ (API 33) specific granular media permissions
+        try:
+            from android import api_version
+            if api_version >= 33:
+                perms.extend([
+                    'android.permission.READ_MEDIA_IMAGES',
+                    'android.permission.READ_MEDIA_VIDEO'
+                ])
+        except ImportError:
+            pass
         request_permissions(perms)
     SwiftCompressor().run()
