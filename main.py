@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+import shutil
 from pathlib import Path
 
 from kivy.lang import Builder
@@ -11,7 +12,18 @@ from kivymd.toast import toast
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton
 
-# --- Compression Logic (Adapted from compress_to_250kb.py) ---
+if platform == "android":
+    from jnius import autoclass, cast
+    from android import activity
+    from android.permissions import request_permissions, Permission
+    
+    Intent = autoclass('android.content.Intent')
+    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    Uri = autoclass('android.net.Uri')
+    ContentResolver = autoclass('android.content.ContentResolver')
+    OpenableColumns = autoclass('android.provider.OpenableColumns')
+
+# --- Compression Logic (Unchanged) ---
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif"}
 PDF_EXTS = {".pdf"}
@@ -87,7 +99,6 @@ def compress_pdf(src, dst, target_kb):
             reader = pypdf.PdfReader(src)
             for i, page in enumerate(reader.pages):
                 jp = os.path.join(tmp_dir, f"page_{i:04d}.jpg")
-                # Simple extraction/rendering fallback for Android compatibility
                 imgs = list(page.images)
                 if imgs:
                     pil_img = Image.open(imgs[0].data)
@@ -180,30 +191,81 @@ class SwiftCompressor(MDApp):
         self.theme_cls.primary_palette = "DeepPurple"
         self.theme_cls.theme_style = "Dark"
         self.selected_path = None
-        self.file_manager = MDFileManager(
-            exit_manager=self.exit_manager,
-            select_path=self.select_path,
-        )
+        self.temp_dir = tempfile.mkdtemp()
+        
+        if platform == "android":
+            activity.bind(on_activity_result=self.on_activity_result)
+        else:
+            self.file_manager = MDFileManager(
+                exit_manager=self.exit_manager,
+                select_path=self.select_path,
+            )
         return Builder.load_string(KV)
 
     def open_file_manager(self):
-        # On Android, start from primary storage
-        path = "/"
         if platform == "android":
-            from android.storage import primary_external_storage_path
-            path = primary_external_storage_path()
+            intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+            intent.setType("*/*")
+            # Filter for images and PDFs
+            mimeTypes = ["image/*", "application/pdf"]
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
+            PythonActivity.mActivity.startActivityForResult(intent, 42)
         else:
             path = os.path.expanduser("~")
-        
-        self.file_manager.show(path)
+            self.file_manager.show(path)
+
+    def on_activity_result(self, request_code, result_code, intent):
+        if request_code == 42:
+            if result_code == -1: # RESULT_OK
+                uri = intent.getData()
+                self.handle_android_uri(uri)
+            else:
+                toast("File selection cancelled")
+
+    def handle_android_uri(self, uri):
+        try:
+            context = PythonActivity.mActivity
+            content_resolver = context.getContentResolver()
+            
+            # Get display name
+            name = "selected_file"
+            cursor = content_resolver.query(uri, None, None, None, None)
+            if cursor and cursor.moveToFirst():
+                name_index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                name = cursor.getString(name_index)
+                cursor.close()
+            
+            # Copy to temp file
+            input_stream = content_resolver.openInputStream(uri)
+            temp_path = os.path.join(self.temp_dir, name)
+            
+            # Read in chunks to avoid memory issues with large files
+            with open(temp_path, "wb") as f:
+                buffer = autoclass('java.lang.reflect.Array').newInstance(autoclass('java.lang.Byte').TYPE, 1024*64)
+                while True:
+                    read = input_stream.read(buffer)
+                    if read == -1:
+                        break
+                    # Convert java byte array to python bytes (inefficient but safe for small/med files)
+                    # Actually, Pyjnius handles byte arrays fairly well lately, but let's be careful.
+                    # A better way is to use a java-based copy if possible, or just:
+                    f.write(bytes(buffer)[:read])
+            
+            self.select_path(temp_path)
+            toast(f"Selected: {name}")
+        except Exception as e:
+            self.show_error_dialog(f"Failed to load file: {str(e)}")
 
     def select_path(self, path):
         self.selected_path = path
         self.root.ids.file_label.text = os.path.basename(path)
-        self.exit_manager()
+        if platform != "android":
+            self.exit_manager()
 
     def exit_manager(self, *args):
-        self.file_manager.close()
+        if platform != "android":
+            self.file_manager.close()
 
     def update_slider_label(self, value):
         self.root.ids.slider_val.text = f"{int(value)} KB"
@@ -217,16 +279,21 @@ class SwiftCompressor(MDApp):
         src = self.selected_path
         ext = Path(src).suffix.lower()
         
-        # Determine output path (Downloads folder)
         if platform == "android":
             from android.storage import primary_external_storage_path
+            # On Android 11+, writing to Download might require specific handling,
+            # but usually the app's Download subfolder works or we use MANAGE_EXTERNAL_STORAGE.
             downloads = os.path.join(primary_external_storage_path(), "Download")
         else:
             downloads = os.path.join(os.path.expanduser("~"), "Downloads")
         
         if not os.path.exists(downloads):
-            os.makedirs(downloads)
-
+            try:
+                os.makedirs(downloads)
+            except:
+                # Fallback to internal storage if Download is restricted
+                downloads = self.user_data_dir
+        
         dst_name = f"{Path(src).stem}_compressed_{target_kb}kb{ext}"
         dst = os.path.join(downloads, dst_name)
 
@@ -244,7 +311,7 @@ class SwiftCompressor(MDApp):
                 self.show_success_dialog(dst)
             else:
                 toast("Compression finished, but was unable to reach target size exactly.")
-                self.show_success_dialog(dst) # Still show result
+                self.show_success_dialog(dst)
 
         except Exception as e:
             self.show_error_dialog(str(e))
@@ -270,10 +337,17 @@ class SwiftCompressor(MDApp):
         )
         self.dialog.open()
 
+    def on_stop(self):
+        # Cleanup temp files
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
 if __name__ == "__main__":
-    # Handle Android permissions
     if platform == "android":
-        from android.permissions import request_permissions, Permission
-        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
+        # Request necessary permissions for older android and general storage access
+        request_permissions([
+            Permission.READ_EXTERNAL_STORAGE, 
+            Permission.WRITE_EXTERNAL_STORAGE,
+            Permission.MANAGE_EXTERNAL_STORAGE
+        ])
     
     SwiftCompressor().run()

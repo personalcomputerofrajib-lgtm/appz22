@@ -4,3 +4,4 @@ __pycache__/
 bin/
 scratch/
 test_logic.py
+*.apk
