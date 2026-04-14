@@ -1,0 +1,607 @@
+#:kivy 2.3.0
+
+# ============================================================
+#  Swift Suite v2.0 — Premium Dark Theme Layout
+# ============================================================
+
+# --- Color Tokens ---
+# Background:   0.08, 0.08, 0.12, 1   (near-black)
+# Surface:      0.12, 0.12, 0.18, 1   (dark card)
+# Primary:      0.45, 0.32, 0.95, 1   (deep purple)
+# Accent:       0.55, 0.40, 1.0, 1    (lighter purple)
+# Text:         0.95, 0.95, 0.97, 1   (white)
+# Text Dim:     0.55, 0.55, 0.62, 1   (gray)
+# Success:      0.30, 0.85, 0.55, 1   (green)
+# Divider:      0.18, 0.18, 0.25, 1   (subtle line)
+
+# --- Reusable Feature Card ---
+<FeatureCard@MDCard>:
+    orientation: "vertical"
+    padding: dp(20)
+    spacing: dp(14)
+    radius: [dp(20),]
+    elevation: 0
+    md_bg_color: 0.12, 0.12, 0.18, 1
+    line_color: 0.18, 0.18, 0.25, 1
+    size_hint_y: None
+    height: self.minimum_height
+
+# --- Status Label ---
+<StatusLabel@MDLabel>:
+    halign: "center"
+    font_style: "Caption"
+    theme_text_color: "Custom"
+    text_color: 0.55, 0.55, 0.62, 1
+    size_hint_y: None
+    height: self.texture_size[1] + dp(8) if self.text else 0
+
+# --- Main Layout ---
+MDBoxLayout:
+    orientation: 'vertical'
+    md_bg_color: 0.08, 0.08, 0.12, 1
+
+    # --- Top App Bar ---
+    MDTopAppBar:
+        title: "Swift Suite"
+        elevation: 0
+        md_bg_color: 0.1, 0.1, 0.15, 1
+        specific_text_color: 0.95, 0.95, 0.97, 1
+
+    # --- Bottom Navigation (4 Tabs) ---
+    MDBottomNavigation:
+        panel_color: 0.1, 0.1, 0.15, 1
+        text_color_active: 0.55, 0.40, 1.0, 1
+        text_color_normal: 0.45, 0.45, 0.52, 1
+
+        # =====================================================
+        #  TAB 1: COMPRESS
+        # =====================================================
+        MDBottomNavigationItem:
+            name: 'compress'
+            text: 'Compress'
+            icon: 'arrow-collapse-all'
+
+            MDScrollView:
+                MDBoxLayout:
+                    id: compress_tab
+                    orientation: 'vertical'
+                    padding: dp(16)
+                    spacing: dp(14)
+                    adaptive_height: True
+
+                    # File Picker Card
+                    FeatureCard:
+                        MDIconButton:
+                            icon: "file-upload-outline"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.40, 1.0, 1
+                            user_font_size: "40sp"
+                            pos_hint: {"center_x": .5}
+                            on_release: app.pick_file_for("compress")
+
+                        MDLabel:
+                            id: comp_file_label
+                            text: "Tap to select Image or PDF"
+                            halign: "center"
+                            font_style: "Body2"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.55, 0.62, 1
+
+                        MDLabel:
+                            id: comp_file_size
+                            text: ""
+                            halign: "center"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.45, 0.45, 0.52, 1
+
+                    # Target Size Card
+                    FeatureCard:
+                        MDLabel:
+                            text: "Target Size"
+                            font_style: "Subtitle2"
+                            theme_text_color: "Custom"
+                            text_color: 0.95, 0.95, 0.97, 1
+
+                        MDBoxLayout:
+                            orientation: "horizontal"
+                            adaptive_height: True
+                            spacing: dp(8)
+
+                            MDSlider:
+                                id: comp_slider
+                                min: 50
+                                max: 5000
+                                value: 250
+                                step: 50
+                                color: 0.55, 0.40, 1.0, 1
+                                hint: False
+                                on_value: app.on_slider_change(self.value)
+
+                            MDLabel:
+                                id: comp_slider_val
+                                text: "250 KB"
+                                size_hint_x: None
+                                width: dp(70)
+                                halign: "right"
+                                theme_text_color: "Custom"
+                                text_color: 0.55, 0.40, 1.0, 1
+                                font_style: "Subtitle2"
+
+                    # Output Format Card
+                    FeatureCard:
+                        MDLabel:
+                            text: "Output Format"
+                            font_style: "Subtitle2"
+                            theme_text_color: "Custom"
+                            text_color: 0.95, 0.95, 0.97, 1
+
+                        MDBoxLayout:
+                            spacing: dp(10)
+                            adaptive_height: True
+                            size_hint_y: None
+                            height: dp(42)
+
+                            MDFillRoundFlatButton:
+                                id: btn_out_pdf
+                                text: "Save as PDF"
+                                md_bg_color: 0.45, 0.32, 0.95, 1
+                                text_color: 1, 1, 1, 1
+                                font_size: "13sp"
+                                on_release: app.set_compress_output("PDF")
+
+                            MDRoundFlatButton:
+                                id: btn_out_orig
+                                text: "Keep Original"
+                                line_color: 0.3, 0.3, 0.4, 1
+                                text_color: 0.7, 0.7, 0.75, 1
+                                font_size: "13sp"
+                                on_release: app.set_compress_output("Original")
+
+                    # Progress
+                    MDProgressBar:
+                        id: comp_progress
+                        value: 0
+                        color: 0.55, 0.40, 1.0, 1
+                        size_hint_y: None
+                        height: dp(4) if self.value > 0 else 0
+
+                    StatusLabel:
+                        id: comp_status
+                        text: ""
+
+                    # Action Button
+                    MDFillRoundFlatButton:
+                        id: btn_compress
+                        text: "COMPRESS"
+                        md_bg_color: 0.45, 0.32, 0.95, 1
+                        text_color: 1, 1, 1, 1
+                        font_size: "15sp"
+                        size_hint_x: 1
+                        pos_hint: {"center_x": .5}
+                        on_release: app.start_compress()
+
+        # =====================================================
+        #  TAB 2: CONVERT
+        # =====================================================
+        MDBottomNavigationItem:
+            name: 'convert'
+            text: 'Convert'
+            icon: 'swap-horizontal-bold'
+
+            MDScrollView:
+                MDBoxLayout:
+                    id: convert_tab
+                    orientation: 'vertical'
+                    padding: dp(16)
+                    spacing: dp(14)
+                    adaptive_height: True
+
+                    # File Picker
+                    FeatureCard:
+                        MDIconButton:
+                            icon: "image-plus"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.40, 1.0, 1
+                            user_font_size: "40sp"
+                            pos_hint: {"center_x": .5}
+                            on_release: app.pick_file_for("convert")
+
+                        MDLabel:
+                            id: conv_file_label
+                            text: "Select image to convert"
+                            halign: "center"
+                            font_style: "Body2"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.55, 0.62, 1
+
+                    # Operation Selector
+                    FeatureCard:
+                        MDLabel:
+                            text: "Operation"
+                            font_style: "Subtitle2"
+                            theme_text_color: "Custom"
+                            text_color: 0.95, 0.95, 0.97, 1
+
+                        MDBoxLayout:
+                            spacing: dp(8)
+                            adaptive_height: True
+                            size_hint_y: None
+                            height: dp(42)
+
+                            MDFillRoundFlatButton:
+                                id: btn_op_format
+                                text: "Format"
+                                md_bg_color: 0.45, 0.32, 0.95, 1
+                                text_color: 1, 1, 1, 1
+                                font_size: "12sp"
+                                on_release: app.set_convert_op("format")
+
+                            MDRoundFlatButton:
+                                id: btn_op_resize
+                                text: "Resize"
+                                line_color: 0.3, 0.3, 0.4, 1
+                                text_color: 0.7, 0.7, 0.75, 1
+                                font_size: "12sp"
+                                on_release: app.set_convert_op("resize")
+
+                            MDRoundFlatButton:
+                                id: btn_op_topdf
+                                text: "To PDF"
+                                line_color: 0.3, 0.3, 0.4, 1
+                                text_color: 0.7, 0.7, 0.75, 1
+                                font_size: "12sp"
+                                on_release: app.set_convert_op("topdf")
+
+                    # Format Options (shown when format selected)
+                    FeatureCard:
+                        id: format_options_card
+                        MDLabel:
+                            text: "Target Format"
+                            font_style: "Subtitle2"
+                            theme_text_color: "Custom"
+                            text_color: 0.95, 0.95, 0.97, 1
+
+                        MDBoxLayout:
+                            spacing: dp(8)
+                            adaptive_height: True
+                            size_hint_y: None
+                            height: dp(42)
+
+                            MDFillRoundFlatButton:
+                                id: btn_fmt_jpg
+                                text: "JPG"
+                                md_bg_color: 0.45, 0.32, 0.95, 1
+                                text_color: 1, 1, 1, 1
+                                font_size: "12sp"
+                                on_release: app.set_target_format("JPG")
+
+                            MDRoundFlatButton:
+                                id: btn_fmt_png
+                                text: "PNG"
+                                line_color: 0.3, 0.3, 0.4, 1
+                                text_color: 0.7, 0.7, 0.75, 1
+                                font_size: "12sp"
+                                on_release: app.set_target_format("PNG")
+
+                            MDRoundFlatButton:
+                                id: btn_fmt_webp
+                                text: "WEBP"
+                                line_color: 0.3, 0.3, 0.4, 1
+                                text_color: 0.7, 0.7, 0.75, 1
+                                font_size: "12sp"
+                                on_release: app.set_target_format("WEBP")
+
+                    # Resize Options (shown when resize selected)
+                    FeatureCard:
+                        id: resize_options_card
+                        opacity: 0
+                        disabled: True
+                        size_hint_y: None
+                        height: 0
+
+                        MDLabel:
+                            text: "Dimensions"
+                            font_style: "Subtitle2"
+                            theme_text_color: "Custom"
+                            text_color: 0.95, 0.95, 0.97, 1
+
+                        MDBoxLayout:
+                            spacing: dp(10)
+                            adaptive_height: True
+                            size_hint_y: None
+                            height: dp(48)
+
+                            MDTextField:
+                                id: resize_w
+                                hint_text: "Width"
+                                text: "1080"
+                                input_filter: "int"
+                                mode: "fill"
+                                fill_color_normal: 0.15, 0.15, 0.22, 1
+                                text_color_normal: 0.9, 0.9, 0.9, 1
+                                hint_text_color_normal: 0.5, 0.5, 0.55, 1
+
+                            MDLabel:
+                                text: "x"
+                                halign: "center"
+                                size_hint_x: 0.2
+                                theme_text_color: "Custom"
+                                text_color: 0.6, 0.6, 0.65, 1
+
+                            MDTextField:
+                                id: resize_h
+                                hint_text: "Height"
+                                text: "1080"
+                                input_filter: "int"
+                                mode: "fill"
+                                fill_color_normal: 0.15, 0.15, 0.22, 1
+                                text_color_normal: 0.9, 0.9, 0.9, 1
+                                hint_text_color_normal: 0.5, 0.5, 0.55, 1
+
+                    # Progress
+                    MDProgressBar:
+                        id: conv_progress
+                        value: 0
+                        color: 0.55, 0.40, 1.0, 1
+                        size_hint_y: None
+                        height: dp(4) if self.value > 0 else 0
+
+                    StatusLabel:
+                        id: conv_status
+                        text: ""
+
+                    MDFillRoundFlatButton:
+                        id: btn_convert
+                        text: "CONVERT"
+                        md_bg_color: 0.45, 0.32, 0.95, 1
+                        text_color: 1, 1, 1, 1
+                        font_size: "15sp"
+                        size_hint_x: 1
+                        pos_hint: {"center_x": .5}
+                        on_release: app.start_convert()
+
+        # =====================================================
+        #  TAB 3: PDF TOOLS
+        # =====================================================
+        MDBottomNavigationItem:
+            name: 'pdf'
+            text: 'PDF'
+            icon: 'file-document-outline'
+
+            MDScrollView:
+                MDBoxLayout:
+                    id: pdf_tab
+                    orientation: 'vertical'
+                    padding: dp(16)
+                    spacing: dp(14)
+                    adaptive_height: True
+
+                    # Operation Selector
+                    FeatureCard:
+                        MDLabel:
+                            text: "PDF Operation"
+                            font_style: "Subtitle2"
+                            theme_text_color: "Custom"
+                            text_color: 0.95, 0.95, 0.97, 1
+
+                        MDBoxLayout:
+                            spacing: dp(8)
+                            adaptive_height: True
+                            size_hint_y: None
+                            height: dp(42)
+
+                            MDFillRoundFlatButton:
+                                id: btn_pdf_merge
+                                text: "Merge"
+                                md_bg_color: 0.45, 0.32, 0.95, 1
+                                text_color: 1, 1, 1, 1
+                                font_size: "12sp"
+                                on_release: app.set_pdf_op("merge")
+
+                            MDRoundFlatButton:
+                                id: btn_pdf_split
+                                text: "Split"
+                                line_color: 0.3, 0.3, 0.4, 1
+                                text_color: 0.7, 0.7, 0.75, 1
+                                font_size: "12sp"
+                                on_release: app.set_pdf_op("split")
+
+                            MDRoundFlatButton:
+                                id: btn_pdf_toimg
+                                text: "To Images"
+                                line_color: 0.3, 0.3, 0.4, 1
+                                text_color: 0.7, 0.7, 0.75, 1
+                                font_size: "12sp"
+                                on_release: app.set_pdf_op("toimg")
+
+                    # File Picker
+                    FeatureCard:
+                        MDIconButton:
+                            icon: "file-pdf-box"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.40, 1.0, 1
+                            user_font_size: "40sp"
+                            pos_hint: {"center_x": .5}
+                            on_release: app.pick_file_for("pdf")
+
+                        MDLabel:
+                            id: pdf_file_label
+                            text: "Select PDF file(s)"
+                            halign: "center"
+                            font_style: "Body2"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.55, 0.62, 1
+
+                        MDLabel:
+                            id: pdf_info_label
+                            text: ""
+                            halign: "center"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.45, 0.45, 0.52, 1
+
+                    # Split Options
+                    FeatureCard:
+                        id: split_options_card
+                        opacity: 0
+                        disabled: True
+                        size_hint_y: None
+                        height: 0
+
+                        MDLabel:
+                            text: "Page Range"
+                            font_style: "Subtitle2"
+                            theme_text_color: "Custom"
+                            text_color: 0.95, 0.95, 0.97, 1
+
+                        MDBoxLayout:
+                            spacing: dp(10)
+                            adaptive_height: True
+                            size_hint_y: None
+                            height: dp(48)
+
+                            MDTextField:
+                                id: split_start
+                                hint_text: "From"
+                                text: "1"
+                                input_filter: "int"
+                                mode: "fill"
+                                fill_color_normal: 0.15, 0.15, 0.22, 1
+                                text_color_normal: 0.9, 0.9, 0.9, 1
+                                hint_text_color_normal: 0.5, 0.5, 0.55, 1
+
+                            MDLabel:
+                                text: "to"
+                                halign: "center"
+                                size_hint_x: 0.2
+                                theme_text_color: "Custom"
+                                text_color: 0.6, 0.6, 0.65, 1
+
+                            MDTextField:
+                                id: split_end
+                                hint_text: "To"
+                                text: ""
+                                input_filter: "int"
+                                mode: "fill"
+                                fill_color_normal: 0.15, 0.15, 0.22, 1
+                                text_color_normal: 0.9, 0.9, 0.9, 1
+                                hint_text_color_normal: 0.5, 0.5, 0.55, 1
+
+                    # Progress
+                    MDProgressBar:
+                        id: pdf_progress
+                        value: 0
+                        color: 0.55, 0.40, 1.0, 1
+                        size_hint_y: None
+                        height: dp(4) if self.value > 0 else 0
+
+                    StatusLabel:
+                        id: pdf_status
+                        text: ""
+
+                    MDFillRoundFlatButton:
+                        id: btn_pdf_go
+                        text: "PROCESS PDF"
+                        md_bg_color: 0.45, 0.32, 0.95, 1
+                        text_color: 1, 1, 1, 1
+                        font_size: "15sp"
+                        size_hint_x: 1
+                        pos_hint: {"center_x": .5}
+                        on_release: app.start_pdf_op()
+
+        # =====================================================
+        #  TAB 4: AI TOOLS
+        # =====================================================
+        MDBottomNavigationItem:
+            name: 'ai'
+            text: 'AI'
+            icon: 'auto-fix'
+
+            MDScrollView:
+                MDBoxLayout:
+                    id: ai_tab
+                    orientation: 'vertical'
+                    padding: dp(16)
+                    spacing: dp(14)
+                    adaptive_height: True
+
+                    # Header
+                    FeatureCard:
+                        MDIconButton:
+                            icon: "image-filter-center-focus"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.40, 1.0, 1
+                            user_font_size: "48sp"
+                            pos_hint: {"center_x": .5}
+                            on_release: app.pick_file_for("ai")
+
+                        MDLabel:
+                            id: ai_file_label
+                            text: "Select a portrait photo"
+                            halign: "center"
+                            font_style: "Body2"
+                            theme_text_color: "Custom"
+                            text_color: 0.55, 0.55, 0.62, 1
+
+                    # Privacy Badge
+                    FeatureCard:
+                        MDBoxLayout:
+                            spacing: dp(10)
+                            adaptive_height: True
+                            size_hint_y: None
+                            height: dp(36)
+
+                            MDIconButton:
+                                icon: "shield-lock-outline"
+                                theme_text_color: "Custom"
+                                text_color: 0.30, 0.85, 0.55, 1
+                                user_font_size: "20sp"
+
+                            MDLabel:
+                                text: "100% Private — AI runs locally on your device. No data uploaded."
+                                font_style: "Caption"
+                                theme_text_color: "Custom"
+                                text_color: 0.55, 0.55, 0.62, 1
+
+                    # Progress
+                    MDProgressBar:
+                        id: ai_progress
+                        value: 0
+                        color: 0.55, 0.40, 1.0, 1
+                        size_hint_y: None
+                        height: dp(4) if self.value > 0 else 0
+
+                    StatusLabel:
+                        id: ai_status
+                        text: ""
+
+                    # Action
+                    MDFillRoundFlatButton:
+                        id: btn_ai_go
+                        text: "REMOVE BACKGROUND"
+                        md_bg_color: 0.45, 0.32, 0.95, 1
+                        text_color: 1, 1, 1, 1
+                        font_size: "15sp"
+                        size_hint_x: 1
+                        pos_hint: {"center_x": .5}
+                        on_release: app.start_ai_removal()
+
+                    # About Section
+                    Widget:
+                        size_hint_y: None
+                        height: dp(20)
+
+                    MDLabel:
+                        text: "Swift Suite v2.0"
+                        halign: "center"
+                        font_style: "Caption"
+                        theme_text_color: "Custom"
+                        text_color: 0.35, 0.35, 0.42, 1
+
+                    MDLabel:
+                        text: "Professional document toolkit.\\nAll processing is private and local."
+                        halign: "center"
+                        font_style: "Caption"
+                        theme_text_color: "Custom"
+                        text_color: 0.30, 0.30, 0.37, 1

@@ -21,7 +21,7 @@ jobs:
           path: |
             .buildozer
             .buildozer_global
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v4
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v5
 
       - name: Build with Buildozer (Docker)
         run: |
@@ -37,12 +37,24 @@ jobs:
               apt-get update && apt-get install -y wget && \
               git config --global --add safe.directory '*' && \
               cd /home/user/hostcwd && \
-              [ -d .buildozer/android/platform/python-for-android ] && buildozer android clean || echo \"Skipping clean...\" && \
+              buildozer android clean && \
               yes | buildozer android debug
             "
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: swift-compressor-debug-apk
+          name: swift-suite-debug-apk
           path: bin/*.apk
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0-build-${{ github.run_number }}
+          name: Swift Suite v2.0 Build ${{ github.run_number }}
+          files: bin/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

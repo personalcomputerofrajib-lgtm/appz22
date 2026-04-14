@@ -1,10 +1,11 @@
 [app]
-title = SwiftCompressor
-package.name = swiftcompressor
+title = Swift Suite
+package.name = swiftsuite
 package.domain = org.rajib
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
-version = 0.1
+source.include_patterns = ui/*,engine/*,utils/*
+version = 2.0
 
 # Requirements
 requirements = python3,kivy==2.3.0,kivymd==1.2.0,pillow==9.5.0,pypdf,img2pdf,pyjnius
@@ -22,15 +23,14 @@ android.minapi = 23
 android.ndk = 25b
 android.archs = arm64-v8a
 
-# External dependencies
+# ML Kit dependencies for AI background removal
 android.gradle_dependencies = com.google.mlkit:segmentation-selfie:16.0.0-beta6,com.google.mlkit:vision-common:17.3.0,com.google.android.gms:play-services-tasks:18.0.2
 
 # Android packaging
-android.preserve_paths = lib/python*/site-packages/*.so
 android.accept_sdk_license = True
 android.skip_update = False
 
-# Icon and splash (optional, defaults used if not provided)
+# Icon and splash (optional)
 # icon.filename = %(source.dir)s/data/icon.png
 # presplash.filename = %(source.dir)s/data/presplash.png
 
