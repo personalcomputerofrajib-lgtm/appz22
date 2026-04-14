@@ -15,12 +15,15 @@ osx.kivy_version = 2.3.0
 fullscreen = 0
 
 # Android permissions
-android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
+android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE, INTERNET
+
 android.api = 33
-android.minapi = 21
-# android.sdk = 33
+android.minapi = 23
 android.ndk = 25b
 android.archs = arm64-v8a
+
+# External dependencies
+android.gradle_dependencies = 'com.google.mlkit:segmentation-selfie:16.0.0-beta6'
 
 # Android packaging
 android.preserve_paths = lib/python*/site-packages/*.so
