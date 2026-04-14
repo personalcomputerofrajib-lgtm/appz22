@@ -35,7 +35,7 @@ jobs:
             -e HOME=/home/user \
             --entrypoint /bin/bash kivy/buildozer:latest -c "
               apt-get update && apt-get install -y wget && \
-              git config --global --add safe.directory /home/user/hostcwd && \
+              git config --global --add safe.directory '*' && \
               cd /home/user/hostcwd && \
               yes | buildozer android debug
             "
